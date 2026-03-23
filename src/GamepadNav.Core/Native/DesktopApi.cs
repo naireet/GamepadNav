@@ -8,7 +8,7 @@ namespace GamepadNav.Core.Native;
 /// </summary>
 public static partial class DesktopApi
 {
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", EntryPoint = "OpenDesktopW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint OpenDesktop(string lpszDesktop, uint dwFlags, [MarshalAs(UnmanagedType.Bool)] bool fInherit, uint dwDesiredAccess);
 
     [LibraryImport("user32.dll", SetLastError = true)]
@@ -22,7 +22,7 @@ public static partial class DesktopApi
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseDesktop(nint hDesktop);
 
-    [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [LibraryImport("user32.dll", EntryPoint = "OpenWindowStationW", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint OpenWindowStation(string lpszWinSta, [MarshalAs(UnmanagedType.Bool)] bool fInherit, uint dwDesiredAccess);
 
     [LibraryImport("user32.dll", SetLastError = true)]
