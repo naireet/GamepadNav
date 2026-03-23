@@ -48,26 +48,36 @@ public partial class KeyboardWindow : Window
 
     public void Toggle()
     {
-        if (IsVisible)
+        if (IsVisible && !_numpadMode)
             Hide();
         else
         {
-            PositionAtBottom();
-            Show();
+            _numpadMode = false;
+            SetLayout(QwertyLayout);
+            ModeLabel.Text = "KEYBOARD";
             _selectedRow = 0;
             _selectedCol = 0;
+            PositionAtBottom();
+            if (!IsVisible) Show();
             UpdateHighlight();
         }
     }
 
     public void ToggleNumpad()
     {
-        _numpadMode = !_numpadMode;
-        SetLayout(_numpadMode ? NumpadLayout : QwertyLayout);
-        ModeLabel.Text = _numpadMode ? "NUMPAD" : "KEYBOARD";
-        _selectedRow = 0;
-        _selectedCol = 0;
-        UpdateHighlight();
+        if (IsVisible && _numpadMode)
+            Hide();
+        else
+        {
+            _numpadMode = true;
+            SetLayout(NumpadLayout);
+            ModeLabel.Text = "NUMPAD";
+            _selectedRow = 0;
+            _selectedCol = 0;
+            PositionAtBottom();
+            if (!IsVisible) Show();
+            UpdateHighlight();
+        }
     }
 
     public void HandleInput(ControllerState current, ControllerState previous)

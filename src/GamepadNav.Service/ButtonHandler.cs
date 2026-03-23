@@ -22,19 +22,24 @@ public sealed class ButtonHandler
 
     public void ProcessButtons(ControllerState current, ControllerState previous)
     {
+        bool backHeld = current.IsButtonDown(GamepadButtons.Back);
+
         // --- Mouse clicks (triggers, analog → digital threshold) ---
         HandleTriggerMouse(current.RightTrigger, ref _rightTriggerHeld,
             InputApi.MOUSEEVENTF_LEFTDOWN, InputApi.MOUSEEVENTF_LEFTUP);
         HandleTriggerMouse(current.LeftTrigger, ref _leftTriggerHeld,
             InputApi.MOUSEEVENTF_RIGHTDOWN, InputApi.MOUSEEVENTF_RIGHTUP);
 
-        // X = Tab (for Alt+Tab with RB held)
-        HandleKeyButton(current, previous, GamepadButtons.X, InputApi.VK_TAB);
+        // Suppress X, Y when Back is held (Back+X/Y are combo actions handled by tray app)
+        if (!backHeld)
+        {
+            HandleKeyButton(current, previous, GamepadButtons.X, InputApi.VK_TAB);
+            HandleKeyButton(current, previous, GamepadButtons.Y, InputApi.VK_LWIN);
+        }
 
         // --- Keyboard keys ---
         HandleKeyButton(current, previous, GamepadButtons.A, InputApi.VK_RETURN);
         HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_BACK);
-        HandleKeyButton(current, previous, GamepadButtons.Y, InputApi.VK_LWIN);
         HandleKeyButton(current, previous, GamepadButtons.Start, InputApi.VK_ESCAPE);
 
         // D-pad → arrow keys

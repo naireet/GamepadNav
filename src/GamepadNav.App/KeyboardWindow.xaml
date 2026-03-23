@@ -16,7 +16,7 @@
                 <TextBlock x:Name="ModeLabel" Text="KEYBOARD" Foreground="#E0E0E0" FontSize="14"
                            FontWeight="SemiBold" FontFamily="Segoe UI"/>
                 <TextBlock Text="  ●  " Foreground="#555" FontSize="10" VerticalAlignment="Center"/>
-                <TextBlock Text="Guide+Y Close  |  Guide+X Numpad  |  A Select  |  B Backspace"
+                <TextBlock Text="Back+Y Close  |  Back+X Numpad  |  A Select  |  B Backspace"
                            Foreground="#888" FontSize="11" VerticalAlignment="Center" FontFamily="Segoe UI"/>
             </StackPanel>
 

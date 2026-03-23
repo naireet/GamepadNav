@@ -62,13 +62,17 @@ public sealed partial class InputEngine : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var config = _configManager.Current;
+        bool isUserSession = Environment.UserInteractive;
 
-        _gameDetector = new GameDetector(config.GameProcesses, config.SuppressProcesses,
-            _loggerFactory.CreateLogger<GameDetector>());
+        if (isUserSession)
+        {
+            _gameDetector = new GameDetector(config.GameProcesses, config.SuppressProcesses,
+                _loggerFactory.CreateLogger<GameDetector>());
 
-        _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
-        _ipcServer.CommandReceived += OnIpcCommand;
-        _ipcServer.Start();
+            _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
+            _ipcServer.CommandReceived += OnIpcCommand;
+            _ipcServer.Start();
+        }
 
         // Enable high-resolution timer for smooth polling (~1ms instead of ~15ms)
         timeBeginPeriod(1);
@@ -78,14 +82,18 @@ public sealed partial class InputEngine : BackgroundService
         // and SetThreadDesktop would BREAK SendInput by detaching from the original desktop.
         bool desktopAware = false;
         DesktopManager? desktopManager = null;
-        bool isUserSession = Environment.UserInteractive;
 
         if (!isUserSession)
         {
             desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
             desktopAware = desktopManager.Initialize();
             if (desktopAware)
-                _logger.LogInformation("Desktop switching enabled — login screen input supported (service mode)");
+            {
+                _logger.LogInformation("Service mode — targeting Winlogon desktop for login screen input");
+                // In Session 0, always attach to Winlogon. SendInput only reaches the lock screen;
+                // when user is logged in, input goes nowhere (harmless).
+                desktopManager.SwitchTo(ActiveDesktop.Winlogon);
+            }
             else
                 _logger.LogWarning("Desktop switching failed — login screen input unavailable");
         }
@@ -113,11 +121,11 @@ public sealed partial class InputEngine : BackgroundService
                 config = _configManager.Current;
                 var state = _reader.Read(config.ControllerIndex);
 
-                // Periodically check which desktop is active and switch thread target
+                // In service mode, periodically re-attach to Winlogon in case of session changes
                 if (desktopAware && ++desktopCheckCounter >= DesktopCheckInterval)
                 {
                     desktopCheckCounter = 0;
-                    desktopManager!.SwitchToActiveDesktop();
+                    desktopManager!.SwitchTo(ActiveDesktop.Winlogon);
                 }
 
                 if (state.IsConnected)
@@ -125,18 +133,26 @@ public sealed partial class InputEngine : BackgroundService
                     if (!_previousState.IsConnected)
                         _logger.LogInformation("Controller connected (index {Index})", config.ControllerIndex);
 
-                    // Game detection (throttled) — check before toggle so suppress is up to date
+                    // Game detection (throttled) — user session only
                     bool gameBlocked = false;
-                    if (++_gameDetectCounter >= GameDetectInterval)
+                    if (_gameDetector != null)
                     {
-                        _gameDetectCounter = 0;
-                        _gameDetector!.Update();
-                    }
-                    gameBlocked = _gameDetector!.IsGameRunning;
+                        if (++_gameDetectCounter >= GameDetectInterval)
+                        {
+                            _gameDetectCounter = 0;
+                            _gameDetector.Update();
+                        }
+                        gameBlocked = _gameDetector.IsGameRunning;
 
-                    // L3+R3 toggle — skip when a suppress process is active (e.g., VR streaming)
-                    if (!_gameDetector.IsFullSuppressed)
+                        // L3+R3 toggle — skip when a suppress process is active
+                        if (!_gameDetector.IsFullSuppressed)
+                            CheckToggle(state);
+                    }
+                    else
+                    {
+                        // Service mode: always allow toggle
                         CheckToggle(state);
+                    }
 
                     if (_enabled && !gameBlocked)
                     {
@@ -145,8 +161,8 @@ public sealed partial class InputEngine : BackgroundService
                         _buttonHandler.ProcessButtons(state, _previousState);
                     }
 
-                    // Broadcast status to tray app periodically
-                    if (_gameDetectCounter == 0)
+                    // Broadcast status to tray app periodically (user session only)
+                    if (_gameDetector != null && _gameDetectCounter == 0)
                     {
                         _ipcServer?.SendStatus(new StatusMessage
                         {
