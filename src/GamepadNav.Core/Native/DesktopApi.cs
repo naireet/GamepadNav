@@ -42,6 +42,10 @@ public static partial class DesktopApi
     public const uint DESKTOP_READOBJECTS = 0x0001;
     public const uint DESKTOP_CREATEWINDOW = 0x0002;
     public const uint DESKTOP_CREATEMENU = 0x0004;
+    public const uint DESKTOP_HOOKCONTROL = 0x0008;
+    public const uint DESKTOP_JOURNALRECORD = 0x0010;
+    public const uint DESKTOP_JOURNALPLAYBACK = 0x0020;
+    public const uint DESKTOP_ENUMERATE = 0x0040;
     public const uint DESKTOP_WRITEOBJECTS = 0x0080;
     public const uint DESKTOP_SWITCHDESKTOP = 0x0100;
     public const uint GENERIC_ALL = 0x10000000;

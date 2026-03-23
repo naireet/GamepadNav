@@ -22,41 +22,47 @@ public sealed partial class LoginScreenEngine : BackgroundService
     private static partial nint GetModuleHandle(string? lpModuleName);
 
     private readonly ILogger<LoginScreenEngine> _logger;
+    private readonly ILoggerFactory _loggerFactory;
 
-    public LoginScreenEngine(ILogger<LoginScreenEngine> logger)
+    public LoginScreenEngine(ILogger<LoginScreenEngine> logger, ILoggerFactory loggerFactory)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("LoginScreenEngine starting (LocalSystem service mode)");
+        // Write to a log file since Event Log doesn't capture ILogger detail
+        var logPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "GamepadNav", "login-service.log");
+        Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
+        void Log(string msg) { File.AppendAllText(logPath, $"{DateTime.Now:HH:mm:ss} {msg}\n"); }
 
-        // Open Winlogon desktop
-        var desktopLogger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<DesktopManager>();
-        var desktopManager = new DesktopManager(desktopLogger);
+        Log("LoginScreenEngine starting");
+
+        var desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
 
         if (!desktopManager.Initialize())
         {
-            _logger.LogError("Failed to initialize DesktopManager — login screen input unavailable");
+            Log("ERROR: Failed to initialize DesktopManager");
             return;
         }
+        Log($"DesktopManager initialized");
 
-        // Attach thread to Winlogon desktop so CreateWindowEx and SendInput target it
         if (!desktopManager.SwitchTo(ActiveDesktop.Winlogon))
         {
-            _logger.LogWarning("Could not switch to Winlogon desktop (error {Error}), falling back to Default",
-                Marshal.GetLastPInvokeError());
+            Log($"WARN: Could not switch to Winlogon (error {Marshal.GetLastPInvokeError()})");
         }
         else
         {
-            _logger.LogInformation("Attached to Winlogon desktop");
+            Log("Attached to Winlogon desktop");
         }
 
-        // Create numpad overlay on the current (Winlogon) desktop
-        var hInstance = GetModuleHandle(null);
-        NumpadOverlay.Create(hInstance);
-        _logger.LogInformation("Numpad overlay created on Winlogon desktop");
+        // Skip overlay creation for now — test raw SendInput first
+        // var hInstance = GetModuleHandle(null);
+        // NumpadOverlay.Create(hInstance);
+        Log("Overlay skipped — testing raw SendInput on Winlogon");
 
         // High-res timer
         timeBeginPeriod(1);
@@ -69,6 +75,8 @@ public sealed partial class LoginScreenEngine : BackgroundService
         float mouseAccumX = 0, mouseAccumY = 0;
         float scrollAccumY = 0, smoothedScrollY = 0;
         bool wasConnected = false;
+
+        Log("Starting poll loop");
 
         frameTimer.Start();
 
@@ -84,8 +92,10 @@ public sealed partial class LoginScreenEngine : BackgroundService
                 if (state.IsConnected)
                 {
                     if (!wasConnected)
-                        _logger.LogInformation("Controller connected on login screen");
-                    wasConnected = true;
+                    {
+                        Log("Controller connected");
+                        wasConnected = true;
+                    }
 
                     // Back+X toggles numpad overlay
                     bool backHeld = state.IsButtonDown(GamepadButtons.Back);

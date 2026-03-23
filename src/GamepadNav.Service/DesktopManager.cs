@@ -55,11 +55,13 @@ public sealed class DesktopManager : IDisposable
                 return false;
             }
 
-            // Open both desktops
+            // Open both desktops — Winlogon needs JOURNALPLAYBACK for SendInput
             const uint desktopAccess = DesktopApi.DESKTOP_READOBJECTS |
                                         DesktopApi.DESKTOP_CREATEWINDOW |
                                         DesktopApi.DESKTOP_WRITEOBJECTS |
-                                        DesktopApi.DESKTOP_SWITCHDESKTOP;
+                                        DesktopApi.DESKTOP_SWITCHDESKTOP |
+                                        DesktopApi.DESKTOP_JOURNALPLAYBACK |
+                                        DesktopApi.DESKTOP_JOURNALRECORD;
 
             _defaultDesktop = DesktopApi.OpenDesktop("Default", 0, false, desktopAccess);
             _winlogonDesktop = DesktopApi.OpenDesktop("Winlogon", 0, false, desktopAccess);
