@@ -30,6 +30,13 @@ public sealed partial class InputEngine : BackgroundService
     private GameDetector? _gameDetector;
     private IpcServer? _ipcServer;
 
+    /// <summary>
+    /// Callback for overlay commands (toggleKeyboard, toggleNumpad).
+    /// Set by the tray app when hosting InputEngine in-process.
+    /// When set, IPC is skipped entirely.
+    /// </summary>
+    public static Action<string>? OverlayCallback { get; set; }
+
     // Game detection polling: check every ~500ms
     private int _gameDetectCounter;
     private const int GameDetectInterval = 30;
@@ -69,9 +76,13 @@ public sealed partial class InputEngine : BackgroundService
             _gameDetector = new GameDetector(config.GameProcesses, config.SuppressProcesses,
                 _loggerFactory.CreateLogger<GameDetector>());
 
-            _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
-            _ipcServer.CommandReceived += OnIpcCommand;
-            _ipcServer.Start();
+            // Only start IPC server if no in-process callback is set
+            if (OverlayCallback == null)
+            {
+                _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
+                _ipcServer.CommandReceived += OnIpcCommand;
+                _ipcServer.Start();
+            }
         }
 
         // Enable high-resolution timer for smooth polling (~1ms instead of ~15ms)
@@ -160,14 +171,20 @@ public sealed partial class InputEngine : BackgroundService
                         ProcessScrolling(state, config, deltaTime);
                         _buttonHandler.ProcessButtons(state, _previousState);
 
-                        // Back+Y/X combos → send keyboard commands to tray app via IPC
+                        // Back+Y/X combos → overlay commands
                         bool backHeld = state.IsButtonDown(GamepadButtons.Back);
                         if (backHeld)
                         {
                             if (Pressed(state, _previousState, GamepadButtons.Y))
-                                _ipcServer?.SendCommand("toggleKeyboard");
+                            {
+                                if (OverlayCallback != null) OverlayCallback("toggleKeyboard");
+                                else _ipcServer?.SendCommand("toggleKeyboard");
+                            }
                             if (Pressed(state, _previousState, GamepadButtons.X))
-                                _ipcServer?.SendCommand("toggleNumpad");
+                            {
+                                if (OverlayCallback != null) OverlayCallback("toggleNumpad");
+                                else _ipcServer?.SendCommand("toggleNumpad");
+                            }
                         }
                     }
 

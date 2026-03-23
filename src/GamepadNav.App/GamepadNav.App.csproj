@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GamepadNav.Core\GamepadNav.Core.csproj" />
+    <ProjectReference Include="..\GamepadNav.Service\GamepadNav.Service.csproj" />
   </ItemGroup>
 
   <ItemGroup>

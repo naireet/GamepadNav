@@ -1,27 +1,41 @@
 ﻿using System.Windows;
 using H.NotifyIcon;
+using GamepadNav.Service;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace GamepadNav.App;
 
 public partial class App : Application
 {
     private TaskbarIcon? _trayIcon;
-    private IpcClient? _ipcClient;
     private KeyboardWindow? _keyboardWindow;
-    private KeyboardController? _keyController;
+    private IHost? _engineHost;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
         _keyboardWindow = new KeyboardWindow();
-        _keyController = new KeyboardController(_keyboardWindow);
 
-        _ipcClient = new IpcClient();
-        _ipcClient.StatusReceived += OnStatusReceived;
-        _ipcClient.CommandReceived += OnCommandReceived;
-        _ipcClient.ControllerStateReceived += OnControllerStateReceived;
-        _ipcClient.Start();
+        // Wire InputEngine overlay commands directly to the keyboard window
+        InputEngine.OverlayCallback = action =>
+        {
+            _keyboardWindow.Dispatcher.Invoke(() =>
+            {
+                switch (action)
+                {
+                    case "toggleKeyboard": _keyboardWindow.Toggle(); break;
+                    case "toggleNumpad": _keyboardWindow.ToggleNumpad(); break;
+                }
+            });
+        };
+
+        // Host InputEngine as a BackgroundService in this process
+        _engineHost = Host.CreateDefaultBuilder()
+            .ConfigureServices(services => services.AddHostedService<InputEngine>())
+            .Build();
+        _ = _engineHost.RunAsync();
 
         _trayIcon = new TaskbarIcon
         {
@@ -31,33 +45,9 @@ public partial class App : Application
         };
     }
 
-    private void OnStatusReceived(Core.StatusMessage status)
-    {
-        Dispatcher.Invoke(() =>
-        {
-            var suffix = status.GameDetected ? $" (game: {status.CurrentGame})" : "";
-            var state = status.Enabled ? "Enabled" : "Disabled";
-            _trayIcon!.ToolTipText = $"GamepadNav — {state}{suffix}";
-        });
-    }
-
-    private void OnCommandReceived(Core.CommandMessage cmd)
-    {
-        _keyController?.HandleCommand(cmd.Action);
-    }
-
-    private void OnControllerStateReceived(Core.ControllerStateMessage state)
-    {
-        _keyController?.HandleControllerState(state);
-    }
-
     private System.Windows.Controls.ContextMenu BuildContextMenu()
     {
         var menu = new System.Windows.Controls.ContextMenu();
-
-        var toggleItem = new System.Windows.Controls.MenuItem { Header = "Toggle Enable" };
-        toggleItem.Click += (_, _) => _ipcClient?.SendCommand("toggle");
-        menu.Items.Add(toggleItem);
 
         var keyboardItem = new System.Windows.Controls.MenuItem { Header = "Show Keyboard" };
         keyboardItem.Click += (_, _) => _keyboardWindow?.Toggle();
@@ -68,7 +58,7 @@ public partial class App : Application
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) =>
         {
-            _ipcClient?.Dispose();
+            _engineHost?.StopAsync().Wait(TimeSpan.FromSeconds(3));
             _trayIcon?.Dispose();
             Shutdown();
         };
@@ -79,7 +69,6 @@ public partial class App : Application
 
     private static System.Drawing.Icon LoadIcon()
     {
-        // Use a system icon as placeholder — replace with custom icon later
         return System.Drawing.SystemIcons.Application;
     }
 }
