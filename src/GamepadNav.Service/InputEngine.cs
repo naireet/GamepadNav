@@ -4,10 +4,20 @@ using System.Runtime.InteropServices;
 
 namespace GamepadNav.Service;
 
+// High-resolution timer for smooth polling
+partial class InputEngine
+{
+    [LibraryImport("winmm.dll")]
+    private static partial uint timeBeginPeriod(uint uMilliseconds);
+
+    [LibraryImport("winmm.dll")]
+    private static partial uint timeEndPeriod(uint uMilliseconds);
+}
+
 /// <summary>
 /// Main input translation engine. Polls XInput and injects mouse/keyboard events via SendInput.
 /// </summary>
-public sealed class InputEngine : BackgroundService
+public sealed partial class InputEngine : BackgroundService
 {
     private readonly ILogger<InputEngine> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -20,9 +30,12 @@ public sealed class InputEngine : BackgroundService
     private GameDetector? _gameDetector;
     private IpcServer? _ipcServer;
 
-    // Game detection polling: check every ~500ms, not every frame
+    // Game detection polling: check every ~500ms
     private int _gameDetectCounter;
-    private const int GameDetectInterval = 30; // frames (~500ms at 60Hz)
+    private const int GameDetectInterval = 30;
+
+    // Delta-time tracking for frame-rate independent movement
+    private readonly System.Diagnostics.Stopwatch _frameTimer = new();
 
     // Accumulated fractional mouse movement (SendInput only takes integers)
     private float _mouseAccumX;
@@ -55,6 +68,9 @@ public sealed class InputEngine : BackgroundService
         _ipcServer.CommandReceived += OnIpcCommand;
         _ipcServer.Start();
 
+        // Enable high-resolution timer for smooth polling (~1ms instead of ~15ms)
+        timeBeginPeriod(1);
+
         // Desktop manager for login screen support (only works when running as LocalSystem service)
         var desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
         bool desktopAware = desktopManager.Initialize();
@@ -69,10 +85,16 @@ public sealed class InputEngine : BackgroundService
         int desktopCheckCounter = 0;
         const int DesktopCheckInterval = 60; // ~1 second at 60Hz
 
+        _frameTimer.Start();
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
+                // Delta-time: actual elapsed time since last frame (frame-rate independent)
+                float deltaTime = (float)_frameTimer.Elapsed.TotalSeconds;
+                _frameTimer.Restart();
+
                 config = _configManager.Current;
                 var state = _reader.Read(config.ControllerIndex);
 
@@ -99,8 +121,8 @@ public sealed class InputEngine : BackgroundService
 
                     if (_enabled && !gameBlocked)
                     {
-                        ProcessMouseMovement(state, config);
-                        ProcessScrolling(state, config);
+                        ProcessMouseMovement(state, config, deltaTime);
+                        ProcessScrolling(state, config, deltaTime);
                         _buttonHandler.ProcessButtons(state, _previousState);
                     }
 
@@ -124,16 +146,21 @@ public sealed class InputEngine : BackgroundService
                 _logger.LogError(ex, "Error in input polling loop");
             }
 
-            await Task.Delay(config.PollIntervalMs, stoppingToken);
+            // High-res sleep: Thread.Sleep(1) with timeBeginPeriod(1) gives ~1ms resolution
+            if (config.PollIntervalMs <= 2)
+                Thread.Sleep(config.PollIntervalMs);
+            else
+                await Task.Delay(config.PollIntervalMs, stoppingToken);
         }
 
         _ipcServer.Dispose();
         desktopManager.Dispose();
         _configManager.Dispose();
+        timeEndPeriod(1);
         _logger.LogInformation("GamepadNav InputEngine stopped.");
     }
 
-    private void ProcessMouseMovement(ControllerState state, GamepadNavConfig config)
+    private void ProcessMouseMovement(ControllerState state, GamepadNavConfig config, float deltaTime)
     {
         if (state.LeftStickX == 0 && state.LeftStickY == 0)
         {
@@ -142,12 +169,13 @@ public sealed class InputEngine : BackgroundService
             return;
         }
 
-        // Apply acceleration curve: speed = magnitude^acceleration * cursorSpeed
+        // Apply acceleration curve: speed = magnitude^acceleration * cursorSpeed * deltaTime
         float magnitude = MathF.Sqrt(state.LeftStickX * state.LeftStickX + state.LeftStickY * state.LeftStickY);
         float accelerated = MathF.Pow(MathF.Min(magnitude, 1f), config.CursorAcceleration);
 
-        float dx = state.LeftStickX / magnitude * accelerated * config.CursorSpeed;
-        float dy = -state.LeftStickY / magnitude * accelerated * config.CursorSpeed; // Y inverted
+        // cursorSpeed is now pixels per second
+        float dx = state.LeftStickX / magnitude * accelerated * config.CursorSpeed * deltaTime;
+        float dy = -state.LeftStickY / magnitude * accelerated * config.CursorSpeed * deltaTime; // Y inverted
 
         _mouseAccumX += dx;
         _mouseAccumY += dy;
@@ -177,12 +205,12 @@ public sealed class InputEngine : BackgroundService
         InputApi.SendInput(1, [input], Marshal.SizeOf<InputApi.INPUT>());
     }
 
-    private void ProcessScrolling(ControllerState state, GamepadNavConfig config)
+    private void ProcessScrolling(ControllerState state, GamepadNavConfig config, float deltaTime)
     {
         // Vertical scroll (right stick Y)
         if (state.RightStickY != 0)
         {
-            _scrollAccumY += state.RightStickY * config.ScrollSpeed;
+            _scrollAccumY += state.RightStickY * config.ScrollSpeed * deltaTime;
             int scrollAmount = (int)_scrollAccumY;
             if (scrollAmount != 0)
             {
@@ -210,7 +238,7 @@ public sealed class InputEngine : BackgroundService
         // Horizontal scroll (right stick X)
         if (state.RightStickX != 0)
         {
-            _scrollAccumX += state.RightStickX * config.ScrollSpeed;
+            _scrollAccumX += state.RightStickX * config.ScrollSpeed * deltaTime;
             int scrollAmount = (int)_scrollAccumX;
             if (scrollAmount != 0)
             {
