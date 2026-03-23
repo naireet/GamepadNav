@@ -6,22 +6,55 @@ namespace GamepadNav.Service;
 
 /// <summary>
 /// Monitors the foreground window to detect when a game is running.
+/// Uses loaded DLL detection (D3D/Vulkan) + process whitelist/blacklist.
 /// Auto-disables GamepadNav input translation during gameplay.
 /// </summary>
 public sealed class GameDetector
 {
-    private static readonly HashSet<string> SystemProcesses = new(StringComparer.OrdinalIgnoreCase)
+    /// <summary>Processes that are never games (system, shell, browsers, media).</summary>
+    private static readonly HashSet<string> WhitelistedProcesses = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explorer", "Playnite.DesktopApp", "Playnite.FullscreenApp",
-        "SearchHost", "ShellExperienceHost", "StartMenuExperienceHost",
-        "ApplicationFrameHost", "SystemSettings", "TextInputHost",
-        "GamepadNav.App", "GamepadNav.Overlay",
+        // Shell / system
+        "explorer", "SearchHost", "ShellExperienceHost", "StartMenuExperienceHost",
+        "ApplicationFrameHost", "SystemSettings", "TextInputHost", "LockApp",
+        "LogonUI", "dwm", "csrss", "winlogon", "taskhostw",
+        // Browsers
+        "msedge", "chrome", "firefox", "opera", "brave",
+        // Media players
+        "vlc", "mpc-hc64", "mpc-hc", "mpv", "wmplayer",
+        // Dev tools / terminals
+        "WindowsTerminal", "cmd", "powershell", "pwsh",
+        "Code", "devenv", "rider64",
+        // Communication
+        "Discord", "Spotify", "Teams",
+        // Utilities
+        "SnippingTool", "ScreenClippingHost", "ScreenSketch",
+        // Game launchers (not games themselves)
+        "Playnite.DesktopApp", "Playnite.FullscreenApp",
+        "steam", "steamwebhelper", "EpicGamesLauncher",
+        "GOG Galaxy", "GalaxyClient",
+        // Our own apps
+        "GamepadNav.App", "GamepadNav.Overlay", "GamepadNav.Service",
+        // Streaming
+        "sunshine", "moonlight",
     };
+
+    /// <summary>DLLs that indicate a DirectX/Vulkan game when loaded.</summary>
+    private static readonly string[] GameDlls =
+    [
+        "d3d9.dll", "d3d11.dll", "d3d12.dll",
+        "vulkan-1.dll",
+    ];
 
     private readonly HashSet<string> _gameProcesses;
     private readonly ILogger<GameDetector> _logger;
     private bool _gameDetected;
     private string? _lastGameProcess;
+
+    // Cache: remember processes we've already classified to avoid repeated DLL scans
+    private readonly Dictionary<int, bool> _processCache = new();
+    private int _cacheClearCounter;
+    private const int CacheClearInterval = 120; // Clear cache every ~2 minutes
 
     public bool IsGameRunning => _gameDetected;
     public string? CurrentGame => _lastGameProcess;
@@ -37,6 +70,13 @@ public sealed class GameDetector
     /// </summary>
     public bool Update()
     {
+        // Periodically clear the process cache
+        if (++_cacheClearCounter >= CacheClearInterval)
+        {
+            _cacheClearCounter = 0;
+            _processCache.Clear();
+        }
+
         var hwnd = InputApi.GetForegroundWindow();
         if (hwnd == nint.Zero)
         {
@@ -56,37 +96,64 @@ public sealed class GameDetector
             using var proc = Process.GetProcessById((int)pid);
             string name = proc.ProcessName;
 
-            // Explicit game process list match
+            // Explicit blacklist (from config) — always a game
             if (_gameProcesses.Contains(name))
             {
                 SetGameState(true, name);
                 return true;
             }
 
-            // Skip known system/shell processes
-            if (SystemProcesses.Contains(name))
+            // Whitelist — never a game
+            if (WhitelistedProcesses.Contains(name))
             {
                 SetGameState(false, null);
                 return false;
             }
 
-            // Heuristic: check if window is likely fullscreen
-            if (IsLikelyFullscreenGame(hwnd))
+            // Check cache first
+            if (_processCache.TryGetValue((int)pid, out bool cachedIsGame))
+            {
+                SetGameState(cachedIsGame, cachedIsGame ? name : null);
+                return cachedIsGame;
+            }
+
+            // DLL-based detection: check if process has DirectX/Vulkan AND is fullscreen
+            bool isGame = IsFullscreen(hwnd) && HasGameDlls(proc);
+            _processCache[(int)pid] = isGame;
+
+            if (isGame)
             {
                 SetGameState(true, name);
                 return true;
             }
         }
-        catch (ArgumentException)
-        {
-            // Process exited between GetWindowThreadProcessId and GetProcessById
-        }
+        catch (ArgumentException) { } // Process exited
+        catch (InvalidOperationException) { } // Process exited during module enumeration
 
         SetGameState(false, null);
         return false;
     }
 
-    private static bool IsLikelyFullscreenGame(nint hwnd)
+    private static bool HasGameDlls(Process proc)
+    {
+        try
+        {
+            foreach (ProcessModule module in proc.Modules)
+            {
+                string modName = module.ModuleName ?? "";
+                foreach (var dll in GameDlls)
+                {
+                    if (modName.Equals(dll, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+        }
+        catch (System.ComponentModel.Win32Exception) { } // Access denied (system process)
+
+        return false;
+    }
+
+    private static bool IsFullscreen(nint hwnd)
     {
         if (!InputApi.GetWindowRect(hwnd, out var rect))
             return false;
@@ -97,7 +164,6 @@ public sealed class GameDetector
         int winW = rect.Right - rect.Left;
         int winH = rect.Bottom - rect.Top;
 
-        // Window covers entire primary monitor (or larger for borderless)
         return winW >= screenW && winH >= screenH;
     }
 
