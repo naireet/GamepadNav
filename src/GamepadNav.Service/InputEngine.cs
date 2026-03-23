@@ -159,6 +159,16 @@ public sealed partial class InputEngine : BackgroundService
                         ProcessMouseMovement(state, config, deltaTime);
                         ProcessScrolling(state, config, deltaTime);
                         _buttonHandler.ProcessButtons(state, _previousState);
+
+                        // Back+Y/X combos → send keyboard commands to tray app via IPC
+                        bool backHeld = state.IsButtonDown(GamepadButtons.Back);
+                        if (backHeld)
+                        {
+                            if (Pressed(state, _previousState, GamepadButtons.Y))
+                                _ipcServer?.SendCommand("toggleKeyboard");
+                            if (Pressed(state, _previousState, GamepadButtons.X))
+                                _ipcServer?.SendCommand("toggleNumpad");
+                        }
                     }
 
                     // Broadcast status to tray app periodically (user session only)
@@ -320,6 +330,9 @@ public sealed partial class InputEngine : BackgroundService
             _toggleDebounce = false;
         }
     }
+
+    private static bool Pressed(ControllerState current, ControllerState previous, GamepadButtons button)
+        => current.IsButtonDown(button) && !previous.IsButtonDown(button);
 
     private void OnIpcCommand(CommandMessage cmd)
     {

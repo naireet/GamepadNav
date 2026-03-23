@@ -17,6 +17,8 @@ public sealed class IpcClient : IDisposable
     private readonly object _writeLock = new();
 
     public event Action<StatusMessage>? StatusReceived;
+    public event Action<CommandMessage>? CommandReceived;
+    public event Action<ControllerStateMessage>? ControllerStateReceived;
 
     public void Start()
     {
@@ -61,6 +63,10 @@ public sealed class IpcClient : IDisposable
                     var msg = IpcProtocol.Deserialize(line);
                     if (msg is StatusMessage status)
                         StatusReceived?.Invoke(status);
+                    else if (msg is CommandMessage cmd)
+                        CommandReceived?.Invoke(cmd);
+                    else if (msg is ControllerStateMessage csm)
+                        ControllerStateReceived?.Invoke(csm);
                 }
             }
             catch (TimeoutException) { }

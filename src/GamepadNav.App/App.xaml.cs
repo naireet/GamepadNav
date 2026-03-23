@@ -8,20 +8,20 @@ public partial class App : Application
     private TaskbarIcon? _trayIcon;
     private IpcClient? _ipcClient;
     private KeyboardWindow? _keyboardWindow;
-    private ControllerPoller? _poller;
+    private KeyboardController? _keyController;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        _keyboardWindow = new KeyboardWindow();
+        _keyController = new KeyboardController(_keyboardWindow);
+
         _ipcClient = new IpcClient();
         _ipcClient.StatusReceived += OnStatusReceived;
+        _ipcClient.CommandReceived += OnCommandReceived;
+        _ipcClient.ControllerStateReceived += OnControllerStateReceived;
         _ipcClient.Start();
-
-        _keyboardWindow = new KeyboardWindow();
-
-        _poller = new ControllerPoller(_keyboardWindow, _ipcClient);
-        _poller.Start();
 
         _trayIcon = new TaskbarIcon
         {
@@ -41,6 +41,16 @@ public partial class App : Application
         });
     }
 
+    private void OnCommandReceived(Core.CommandMessage cmd)
+    {
+        _keyController?.HandleCommand(cmd.Action);
+    }
+
+    private void OnControllerStateReceived(Core.ControllerStateMessage state)
+    {
+        _keyController?.HandleControllerState(state);
+    }
+
     private System.Windows.Controls.ContextMenu BuildContextMenu()
     {
         var menu = new System.Windows.Controls.ContextMenu();
@@ -58,7 +68,6 @@ public partial class App : Application
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) =>
         {
-            _poller?.Stop();
             _ipcClient?.Dispose();
             _trayIcon?.Dispose();
             Shutdown();

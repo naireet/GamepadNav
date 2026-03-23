@@ -3,76 +3,55 @@ using GamepadNav.Core;
 namespace GamepadNav.App;
 
 /// <summary>
-/// Polls the controller directly in the tray app for keyboard overlay navigation.
-/// The service handles mouse/button injection; the app only needs controller state
-/// for navigating the keyboard grid when the overlay is visible.
-/// Also handles Back+Y (toggle keyboard) and Back+X (toggle numpad).
+/// Receives commands from the engine via IPC to control the keyboard overlay.
+/// No XInput polling — the engine handles all controller input.
 /// </summary>
-public sealed class ControllerPoller
+public sealed class KeyboardController
 {
     private readonly KeyboardWindow _keyboard;
-    private readonly IpcClient _ipcClient;
-    private readonly XInputReader _reader;
-    private readonly CancellationTokenSource _cts = new();
-    private Task? _pollTask;
-    private ControllerState _previousState;
 
-    public ControllerPoller(KeyboardWindow keyboard, IpcClient ipcClient)
+    public KeyboardController(KeyboardWindow keyboard)
     {
         _keyboard = keyboard;
-        _ipcClient = ipcClient;
-        _reader = new XInputReader(0.15f);
     }
 
-    public void Start()
+    /// <summary>
+    /// Handle a command from the engine (via IPC).
+    /// </summary>
+    public void HandleCommand(string action)
     {
-        _pollTask = Task.Run(PollLoop);
-    }
-
-    public void Stop()
-    {
-        _cts.Cancel();
-    }
-
-    private async Task PollLoop()
-    {
-        while (!_cts.IsCancellationRequested)
+        _keyboard.Dispatcher.Invoke(() =>
         {
-            try
+            switch (action)
             {
-                var state = _reader.Read();
-
-                if (state.IsConnected)
-                {
-                    bool backHeld = state.IsButtonDown(GamepadButtons.Back);
-
-                    // Back + Y → toggle keyboard
-                    if (backHeld && Pressed(state, _previousState, GamepadButtons.Y))
-                    {
-                        _keyboard.Dispatcher.Invoke(() => _keyboard.Toggle());
-                    }
-
-                    // Back + X → toggle numpad mode
-                    if (backHeld && Pressed(state, _previousState, GamepadButtons.X))
-                    {
-                        _keyboard.Dispatcher.Invoke(() => _keyboard.ToggleNumpad());
-                    }
-
-                    // When keyboard is visible, route d-pad and A/B to it
-                    if (_keyboard.IsVisible)
-                    {
-                        _keyboard.Dispatcher.Invoke(() => _keyboard.HandleInput(state, _previousState));
-                    }
-                }
-
-                _previousState = state;
+                case "toggleKeyboard":
+                    _keyboard.Toggle();
+                    break;
+                case "toggleNumpad":
+                    _keyboard.ToggleNumpad();
+                    break;
             }
-            catch { }
-
-            await Task.Delay(16, _cts.Token).ConfigureAwait(false);
-        }
+        });
     }
 
-    private static bool Pressed(ControllerState current, ControllerState previous, GamepadButtons button)
-        => current.IsButtonDown(button) && !previous.IsButtonDown(button);
+    /// <summary>
+    /// Forward controller state to the keyboard overlay for d-pad navigation.
+    /// </summary>
+    public void HandleControllerState(ControllerStateMessage state)
+    {
+        if (!_keyboard.IsVisible) return;
+
+        _keyboard.Dispatcher.Invoke(() =>
+        {
+            var cs = new ControllerState
+            {
+                IsConnected = true,
+                Buttons = (GamepadButtons)state.Buttons,
+            };
+            _keyboard.HandleInput(cs, _lastState);
+            _lastState = cs;
+        });
+    }
+
+    private ControllerState _lastState;
 }

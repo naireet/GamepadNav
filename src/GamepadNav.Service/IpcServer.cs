@@ -29,23 +29,40 @@ public sealed class IpcServer : IDisposable
     }
 
     /// <summary>
-    /// Sends a status update to the connected tray app. No-op if not connected.
+    /// Sends a command to the tray app. Non-blocking.
+    /// </summary>
+    public void SendCommand(string action)
+    {
+        var json = IpcProtocol.Serialize(new CommandMessage { Action = action });
+        ThreadPool.QueueUserWorkItem(_ => WriteMessage(json));
+    }
+
+    /// <summary>
+    /// Sends controller state to the tray app for keyboard overlay navigation. Non-blocking.
+    /// </summary>
+    public void SendControllerState(ControllerState state)
+    {
+        var msg = new ControllerStateMessage { Buttons = (ushort)state.Buttons };
+        var json = IpcProtocol.Serialize(msg);
+        ThreadPool.QueueUserWorkItem(_ => WriteMessage(json));
+    }
+
+    /// <summary>
+    /// Sends a status update to the tray app. Non-blocking.
     /// </summary>
     public void SendStatus(StatusMessage status)
+    {
+        var json = IpcProtocol.Serialize(status);
+        ThreadPool.QueueUserWorkItem(_ => WriteMessage(json));
+    }
+
+    private void WriteMessage(string json)
     {
         lock (_writeLock)
         {
             if (_writer == null) return;
-            try
-            {
-                var json = IpcProtocol.Serialize(status);
-                _writer.WriteLine(json);
-                _writer.Flush();
-            }
-            catch
-            {
-                // Client disconnected — will reconnect in listen loop
-            }
+            try { _writer.WriteLine(json); }
+            catch { }
         }
     }
 
