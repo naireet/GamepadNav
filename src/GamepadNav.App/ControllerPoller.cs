@@ -6,7 +6,7 @@ namespace GamepadNav.App;
 /// Polls the controller directly in the tray app for keyboard overlay navigation.
 /// The service handles mouse/button injection; the app only needs controller state
 /// for navigating the keyboard grid when the overlay is visible.
-/// Also handles Guide+Y (toggle keyboard) and Guide+X (toggle numpad).
+/// Also handles Back+Y (toggle keyboard) and Back+X (toggle numpad).
 /// </summary>
 public sealed class ControllerPoller
 {
@@ -44,16 +44,16 @@ public sealed class ControllerPoller
 
                 if (state.IsConnected)
                 {
-                    bool guideHeld = state.IsButtonDown(GamepadButtons.Guide);
+                    bool backHeld = state.IsButtonDown(GamepadButtons.Back);
 
-                    // Guide + Y → toggle keyboard
-                    if (guideHeld && Pressed(state, _previousState, GamepadButtons.Y))
+                    // Back + Y → toggle keyboard
+                    if (backHeld && Pressed(state, _previousState, GamepadButtons.Y))
                     {
                         _keyboard.Dispatcher.Invoke(() => _keyboard.Toggle());
                     }
 
-                    // Guide + X → toggle numpad mode
-                    if (guideHeld && Pressed(state, _previousState, GamepadButtons.X))
+                    // Back + X → toggle numpad mode
+                    if (backHeld && Pressed(state, _previousState, GamepadButtons.X))
                     {
                         _keyboard.Dispatcher.Invoke(() => _keyboard.ToggleNumpad());
                     }

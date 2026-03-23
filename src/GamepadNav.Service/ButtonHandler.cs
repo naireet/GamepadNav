@@ -22,13 +22,10 @@ public sealed class ButtonHandler
 
     public void ProcessButtons(ControllerState current, ControllerState previous)
     {
-        // --- Mouse clicks ---
-        // RB = left click (user preference: reversed)
-        HandleMouseButton(current, previous, GamepadButtons.RightShoulder,
+        // --- Mouse clicks (triggers, analog → digital threshold) ---
+        HandleTriggerMouse(current.RightTrigger, ref _rightTriggerHeld,
             InputApi.MOUSEEVENTF_LEFTDOWN, InputApi.MOUSEEVENTF_LEFTUP);
-
-        // LB = right click
-        HandleMouseButton(current, previous, GamepadButtons.LeftShoulder,
+        HandleTriggerMouse(current.LeftTrigger, ref _leftTriggerHeld,
             InputApi.MOUSEEVENTF_RIGHTDOWN, InputApi.MOUSEEVENTF_RIGHTUP);
 
         // X = middle click
@@ -38,8 +35,7 @@ public sealed class ButtonHandler
         // --- Keyboard keys ---
         HandleKeyButton(current, previous, GamepadButtons.A, InputApi.VK_RETURN);
         HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_ESCAPE);
-        HandleKeyButton(current, previous, GamepadButtons.Start, InputApi.VK_RETURN);
-        HandleKeyButton(current, previous, GamepadButtons.Back, InputApi.VK_ESCAPE);
+        HandleKeyButton(current, previous, GamepadButtons.Y, InputApi.VK_LWIN);
 
         // D-pad → arrow keys
         HandleKeyButton(current, previous, GamepadButtons.DPadUp, InputApi.VK_UP, extended: true);
@@ -47,9 +43,9 @@ public sealed class ButtonHandler
         HandleKeyButton(current, previous, GamepadButtons.DPadLeft, InputApi.VK_LEFT, extended: true);
         HandleKeyButton(current, previous, GamepadButtons.DPadRight, InputApi.VK_RIGHT, extended: true);
 
-        // --- Trigger modifiers (analog → digital threshold) ---
-        HandleTriggerModifier(current.LeftTrigger, ref _leftTriggerHeld, InputApi.VK_SHIFT);
-        HandleTriggerModifier(current.RightTrigger, ref _rightTriggerHeld, InputApi.VK_CONTROL);
+        // --- Shoulder modifiers (hold) ---
+        HandleKeyButton(current, previous, GamepadButtons.RightShoulder, InputApi.VK_SHIFT);
+        HandleKeyButton(current, previous, GamepadButtons.LeftShoulder, InputApi.VK_CONTROL);
     }
 
     private static void HandleMouseButton(ControllerState current, ControllerState previous,
@@ -76,18 +72,18 @@ public sealed class ButtonHandler
             SendKeyEvent(vk, down: false, extended);
     }
 
-    private void HandleTriggerModifier(float triggerValue, ref bool held, ushort vk)
+    private void HandleTriggerMouse(float triggerValue, ref bool held, uint downFlag, uint upFlag)
     {
         bool pressed = triggerValue >= _config.TriggerThreshold;
 
         if (pressed && !held)
         {
-            SendKeyEvent(vk, down: true);
+            SendMouseEvent(downFlag);
             held = true;
         }
         else if (!pressed && held)
         {
-            SendKeyEvent(vk, down: false);
+            SendMouseEvent(upFlag);
             held = false;
         }
     }
