@@ -73,13 +73,26 @@ public sealed partial class InputEngine : BackgroundService
         // Enable high-resolution timer for smooth polling (~1ms instead of ~15ms)
         timeBeginPeriod(1);
 
-        // Desktop manager for login screen support (only works when running as LocalSystem service)
-        var desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
-        bool desktopAware = desktopManager.Initialize();
-        if (desktopAware)
-            _logger.LogInformation("Desktop switching enabled — login screen input supported");
+        // Desktop manager for login screen support — only useful when running as LocalSystem service (Session 0).
+        // In a user session, the process is already on the correct desktop; calling SetProcessWindowStation
+        // and SetThreadDesktop would BREAK SendInput by detaching from the original desktop.
+        bool desktopAware = false;
+        DesktopManager? desktopManager = null;
+        bool isUserSession = Environment.UserInteractive;
+
+        if (!isUserSession)
+        {
+            desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
+            desktopAware = desktopManager.Initialize();
+            if (desktopAware)
+                _logger.LogInformation("Desktop switching enabled — login screen input supported (service mode)");
+            else
+                _logger.LogWarning("Desktop switching failed — login screen input unavailable");
+        }
         else
-            _logger.LogInformation("Desktop switching unavailable — running in user-mode only");
+        {
+            _logger.LogInformation("Running in user session — desktop switching skipped (not needed)");
+        }
 
         _logger.LogInformation("GamepadNav InputEngine starting. Enabled={Enabled}, PollInterval={Interval}ms",
             _enabled, config.PollIntervalMs);
@@ -104,11 +117,14 @@ public sealed partial class InputEngine : BackgroundService
                 if (desktopAware && ++desktopCheckCounter >= DesktopCheckInterval)
                 {
                     desktopCheckCounter = 0;
-                    desktopManager.SwitchToActiveDesktop();
+                    desktopManager!.SwitchToActiveDesktop();
                 }
 
                 if (state.IsConnected)
                 {
+                    if (!_previousState.IsConnected)
+                        _logger.LogInformation("Controller connected (index {Index})", config.ControllerIndex);
+
                     // L3+R3 toggle check (always active regardless of _enabled)
                     CheckToggle(state);
 
@@ -131,7 +147,7 @@ public sealed partial class InputEngine : BackgroundService
                     // Broadcast status to tray app periodically
                     if (_gameDetectCounter == 0)
                     {
-                        _ipcServer.SendStatus(new StatusMessage
+                        _ipcServer?.SendStatus(new StatusMessage
                         {
                             Enabled = _enabled,
                             ControllerConnected = state.IsConnected,
@@ -139,6 +155,10 @@ public sealed partial class InputEngine : BackgroundService
                             CurrentGame = _gameDetector.CurrentGame,
                         });
                     }
+                }
+                else if (_previousState.IsConnected)
+                {
+                    _logger.LogWarning("Controller disconnected — waiting for reconnect");
                 }
 
                 _previousState = state;
@@ -155,8 +175,8 @@ public sealed partial class InputEngine : BackgroundService
                 await Task.Delay(config.PollIntervalMs, stoppingToken);
         }
 
-        _ipcServer.Dispose();
-        desktopManager.Dispose();
+        _ipcServer?.Dispose();
+        desktopManager?.Dispose();
         _configManager.Dispose();
         timeEndPeriod(1);
         _logger.LogInformation("GamepadNav InputEngine stopped.");
