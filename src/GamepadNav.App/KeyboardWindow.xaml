@@ -5,7 +5,8 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
         WindowStartupLocation="Manual"
-        Visibility="Hidden">
+        Visibility="Hidden"
+        KeyDown="OnKeyDown">
     <Border Background="#DD1A1A2E" CornerRadius="12" Padding="16" Margin="8">
         <Border.Effect>
             <DropShadowEffect BlurRadius="20" ShadowDepth="0" Color="Black" Opacity="0.6"/>

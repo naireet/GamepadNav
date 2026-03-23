@@ -2,13 +2,17 @@ using GamepadNav.Service;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Run as a Windows Service when not launched from console
 builder.Services.AddWindowsService(options =>
 {
     options.ServiceName = "GamepadNav";
 });
 
-builder.Services.AddHostedService<InputEngine>();
+// When running as a Windows Service (LocalSystem), use the slim login screen engine.
+// When running interactively (user session), use the full InputEngine.
+if (Environment.UserInteractive)
+    builder.Services.AddHostedService<InputEngine>();
+else
+    builder.Services.AddHostedService<LoginScreenEngine>();
 
 var host = builder.Build();
 host.Run();

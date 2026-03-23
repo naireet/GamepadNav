@@ -44,6 +44,14 @@ public partial class KeyboardWindow : Window
         InitializeComponent();
         SetLayout(QwertyLayout);
         PositionAtBottom();
+        // Allow keyboard focus for Esc handling
+        Focusable = true;
+    }
+
+    private void OnKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Escape)
+            Hide();
     }
 
     public void Toggle()

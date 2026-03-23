@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GamepadNav.Core\GamepadNav.Core.csproj" />
+    <ProjectReference Include="..\GamepadNav.Overlay\GamepadNav.Overlay.csproj" />
   </ItemGroup>
 </Project>
