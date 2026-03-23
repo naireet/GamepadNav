@@ -129,6 +129,23 @@ public sealed partial class InputEngine : BackgroundService
                 float deltaTime = (float)_frameTimer.Elapsed.TotalSeconds;
                 _frameTimer.Restart();
 
+                // Detect sleep/wake: if deltaTime > 2s, the system was suspended
+                if (deltaTime > 2.0f)
+                {
+                    _logger.LogInformation("Wake detected (gap={Gap:F1}s) — priming input queue", deltaTime);
+                    // Send a zero-delta mouse move to prime the Windows input queue
+                    var primer = new InputApi.INPUT
+                    {
+                        type = InputApi.INPUT_MOUSE,
+                        union = new InputApi.INPUT_UNION
+                        {
+                            mi = new InputApi.MOUSEINPUT { dwFlags = InputApi.MOUSEEVENTF_MOVE }
+                        }
+                    };
+                    InputApi.SendInput(1, [primer], Marshal.SizeOf<InputApi.INPUT>());
+                    deltaTime = 0.016f; // Reset to ~60fps to avoid huge movement spike
+                }
+
                 config = _configManager.Current;
                 var state = _reader.Read(config.ControllerIndex);
 
