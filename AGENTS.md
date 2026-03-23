@@ -28,16 +28,31 @@ GamepadNav.sln
 # Build all
 dotnet build
 
-# Run service in console mode (dev)
+# Run tray app (includes InputEngine — single process)
+dotnet run --project src\GamepadNav.App
+
+# Run engine standalone (no tray icon, no overlay)
 dotnet run --project src\GamepadNav.Service
 
-# Install service
-sc.exe create GamepadNav binPath="C:\Code\GamepadNav\src\GamepadNav.Service\bin\Release\net8.0\win-x64\GamepadNav.Service.exe"
-sc.exe config GamepadNav start=auto
-
-# Run tray app
-dotnet run --project src\GamepadNav.App
+# Publish tray app
+dotnet publish src\GamepadNav.App -c Release -r win-x64 --self-contained false -o publish\app
 ```
+
+## Startup
+
+- **Tray app**: Scheduled task `GamepadNav` — runs `publish\app\GamepadNav.App.exe` at logon
+- **Lock screen**: Xbox-PIN-Controller credential provider DLL in System32 (see below)
+
+## Lock Screen PIN Entry
+
+Uses [Xbox-PIN-Controller](https://github.com/naireet/Xbox-PIN-Controller) (forked, MIT license).
+Credential Provider DLL loaded by LogonUI.exe — runs inside the Winlogon process.
+
+Install: `copy XboxPINController.dll C:\Windows\System32` + `reg import register.reg`
+Uninstall: `reg import Unregister.reg` + `del C:\Windows\System32\XboxPINController.dll`
+Files: `C:\Code\Xbox-PIN-Controller\release\`
+
+PIN mapping: 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Right, 5=LT, 6=RT, 7=LB, 8=RB, 9=Y, 0=X
 
 ## Controller Mapping
 
