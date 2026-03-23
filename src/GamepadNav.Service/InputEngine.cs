@@ -55,8 +55,19 @@ public sealed class InputEngine : BackgroundService
         _ipcServer.CommandReceived += OnIpcCommand;
         _ipcServer.Start();
 
+        // Desktop manager for login screen support (only works when running as LocalSystem service)
+        var desktopManager = new DesktopManager(_loggerFactory.CreateLogger<DesktopManager>());
+        bool desktopAware = desktopManager.Initialize();
+        if (desktopAware)
+            _logger.LogInformation("Desktop switching enabled — login screen input supported");
+        else
+            _logger.LogInformation("Desktop switching unavailable — running in user-mode only");
+
         _logger.LogInformation("GamepadNav InputEngine starting. Enabled={Enabled}, PollInterval={Interval}ms",
             _enabled, config.PollIntervalMs);
+
+        int desktopCheckCounter = 0;
+        const int DesktopCheckInterval = 60; // ~1 second at 60Hz
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -64,6 +75,13 @@ public sealed class InputEngine : BackgroundService
             {
                 config = _configManager.Current;
                 var state = _reader.Read(config.ControllerIndex);
+
+                // Periodically check which desktop is active and switch thread target
+                if (desktopAware && ++desktopCheckCounter >= DesktopCheckInterval)
+                {
+                    desktopCheckCounter = 0;
+                    desktopManager.SwitchToActiveDesktop();
+                }
 
                 if (state.IsConnected)
                 {
@@ -110,6 +128,7 @@ public sealed class InputEngine : BackgroundService
         }
 
         _ipcServer.Dispose();
+        desktopManager.Dispose();
         _configManager.Dispose();
         _logger.LogInformation("GamepadNav InputEngine stopped.");
     }
