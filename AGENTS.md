@@ -47,14 +47,14 @@ dotnet run --project src\GamepadNav.App
 | Right Stick | Scroll (vertical + horizontal) |
 | RT (Right Trigger) | Left click |
 | LT (Left Trigger) | Right click |
-| RB | Shift (hold) |
+| RB | Alt (hold) |
 | LB | Ctrl (hold) |
 | A | Enter |
-| B | Escape / Backspace |
-| X | Middle click |
+| B | Backspace |
+| X | Tab (RB+X = Alt+Tab) |
 | Y | Windows / Start menu |
 | D-pad | Arrow keys |
-| Start | (unmapped — reserved) |
+| Start | Escape |
 | Back | Combo modifier (see below) |
 | Back + Y | Toggle virtual keyboard |
 | Back + X | Toggle numpad mode |

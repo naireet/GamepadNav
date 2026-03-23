@@ -28,14 +28,14 @@ public sealed class ButtonHandler
         HandleTriggerMouse(current.LeftTrigger, ref _leftTriggerHeld,
             InputApi.MOUSEEVENTF_RIGHTDOWN, InputApi.MOUSEEVENTF_RIGHTUP);
 
-        // X = middle click
-        HandleMouseButton(current, previous, GamepadButtons.X,
-            InputApi.MOUSEEVENTF_MIDDLEDOWN, InputApi.MOUSEEVENTF_MIDDLEUP);
+        // X = Tab (for Alt+Tab with RB held)
+        HandleKeyButton(current, previous, GamepadButtons.X, InputApi.VK_TAB);
 
         // --- Keyboard keys ---
         HandleKeyButton(current, previous, GamepadButtons.A, InputApi.VK_RETURN);
-        HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_ESCAPE);
+        HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_BACK);
         HandleKeyButton(current, previous, GamepadButtons.Y, InputApi.VK_LWIN);
+        HandleKeyButton(current, previous, GamepadButtons.Start, InputApi.VK_ESCAPE);
 
         // D-pad → arrow keys
         HandleKeyButton(current, previous, GamepadButtons.DPadUp, InputApi.VK_UP, extended: true);
@@ -44,7 +44,7 @@ public sealed class ButtonHandler
         HandleKeyButton(current, previous, GamepadButtons.DPadRight, InputApi.VK_RIGHT, extended: true);
 
         // --- Shoulder modifiers (hold) ---
-        HandleKeyButton(current, previous, GamepadButtons.RightShoulder, InputApi.VK_SHIFT);
+        HandleKeyButton(current, previous, GamepadButtons.RightShoulder, InputApi.VK_MENU);
         HandleKeyButton(current, previous, GamepadButtons.LeftShoulder, InputApi.VK_CONTROL);
     }
 

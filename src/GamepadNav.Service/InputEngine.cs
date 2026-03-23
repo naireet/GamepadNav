@@ -42,6 +42,8 @@ public sealed partial class InputEngine : BackgroundService
     private float _mouseAccumY;
     private float _scrollAccumY;
     private float _scrollAccumX;
+    private float _smoothedScrollY;
+    private float _smoothedScrollX;
 
     public InputEngine(ILogger<InputEngine> logger, ILoggerFactory loggerFactory)
     {
@@ -207,27 +209,21 @@ public sealed partial class InputEngine : BackgroundService
 
     private void ProcessScrolling(ControllerState state, GamepadNavConfig config, float deltaTime)
     {
-        // Vertical scroll (right stick Y)
-        if (state.RightStickY != 0)
+        // Smooth the stick input to reduce jitter
+        const float smoothing = 0.15f;
+        _smoothedScrollY = _smoothedScrollY + (state.RightStickY - _smoothedScrollY) * smoothing;
+        _smoothedScrollX = _smoothedScrollX + (state.RightStickX - _smoothedScrollX) * smoothing;
+
+        // Vertical scroll (right stick Y) — use sub-notch increments for smooth scrolling
+        float absY = MathF.Abs(_smoothedScrollY);
+        if (absY > 0.01f)
         {
-            _scrollAccumY += state.RightStickY * config.ScrollSpeed * deltaTime;
+            _scrollAccumY += _smoothedScrollY * config.ScrollSpeed * deltaTime * 120f;
             int scrollAmount = (int)_scrollAccumY;
             if (scrollAmount != 0)
             {
                 _scrollAccumY -= scrollAmount;
-                var input = new InputApi.INPUT
-                {
-                    type = InputApi.INPUT_MOUSE,
-                    union = new InputApi.INPUT_UNION
-                    {
-                        mi = new InputApi.MOUSEINPUT
-                        {
-                            mouseData = scrollAmount * 120, // WHEEL_DELTA = 120
-                            dwFlags = InputApi.MOUSEEVENTF_WHEEL,
-                        }
-                    }
-                };
-                InputApi.SendInput(1, [input], Marshal.SizeOf<InputApi.INPUT>());
+                SendScrollEvent(scrollAmount, InputApi.MOUSEEVENTF_WHEEL);
             }
         }
         else
@@ -236,32 +232,38 @@ public sealed partial class InputEngine : BackgroundService
         }
 
         // Horizontal scroll (right stick X)
-        if (state.RightStickX != 0)
+        float absX = MathF.Abs(_smoothedScrollX);
+        if (absX > 0.01f)
         {
-            _scrollAccumX += state.RightStickX * config.ScrollSpeed * deltaTime;
+            _scrollAccumX += _smoothedScrollX * config.ScrollSpeed * deltaTime * 120f;
             int scrollAmount = (int)_scrollAccumX;
             if (scrollAmount != 0)
             {
                 _scrollAccumX -= scrollAmount;
-                var input = new InputApi.INPUT
-                {
-                    type = InputApi.INPUT_MOUSE,
-                    union = new InputApi.INPUT_UNION
-                    {
-                        mi = new InputApi.MOUSEINPUT
-                        {
-                            mouseData = scrollAmount * 120,
-                            dwFlags = InputApi.MOUSEEVENTF_HWHEEL,
-                        }
-                    }
-                };
-                InputApi.SendInput(1, [input], Marshal.SizeOf<InputApi.INPUT>());
+                SendScrollEvent(scrollAmount, InputApi.MOUSEEVENTF_HWHEEL);
             }
         }
         else
         {
             _scrollAccumX = 0;
         }
+    }
+
+    private static void SendScrollEvent(int amount, uint flags)
+    {
+        var input = new InputApi.INPUT
+        {
+            type = InputApi.INPUT_MOUSE,
+            union = new InputApi.INPUT_UNION
+            {
+                mi = new InputApi.MOUSEINPUT
+                {
+                    mouseData = amount,
+                    dwFlags = flags,
+                }
+            }
+        };
+        InputApi.SendInput(1, [input], Marshal.SizeOf<InputApi.INPUT>());
     }
 
     private bool _toggleDebounce;

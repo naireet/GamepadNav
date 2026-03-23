@@ -92,6 +92,7 @@ public static partial class InputApi
     public const ushort VK_TAB = 0x09;
     public const ushort VK_SHIFT = 0x10;
     public const ushort VK_CONTROL = 0x11;
+    public const ushort VK_MENU = 0x12; // Alt
     public const ushort VK_LWIN = 0x5B;
     public const ushort VK_UP = 0x26;
     public const ushort VK_DOWN = 0x28;
