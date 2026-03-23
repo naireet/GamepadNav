@@ -63,7 +63,7 @@ public sealed partial class InputEngine : BackgroundService
     {
         var config = _configManager.Current;
 
-        _gameDetector = new GameDetector(config.GameProcesses,
+        _gameDetector = new GameDetector(config.GameProcesses, config.SuppressProcesses,
             _loggerFactory.CreateLogger<GameDetector>());
 
         _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
@@ -125,10 +125,7 @@ public sealed partial class InputEngine : BackgroundService
                     if (!_previousState.IsConnected)
                         _logger.LogInformation("Controller connected (index {Index})", config.ControllerIndex);
 
-                    // L3+R3 toggle check (always active regardless of _enabled)
-                    CheckToggle(state);
-
-                    // Game detection (throttled)
+                    // Game detection (throttled) — check before toggle so suppress is up to date
                     bool gameBlocked = false;
                     if (++_gameDetectCounter >= GameDetectInterval)
                     {
@@ -136,6 +133,10 @@ public sealed partial class InputEngine : BackgroundService
                         _gameDetector!.Update();
                     }
                     gameBlocked = _gameDetector!.IsGameRunning;
+
+                    // L3+R3 toggle — skip when a suppress process is active (e.g., VR streaming)
+                    if (!_gameDetector.IsFullSuppressed)
+                        CheckToggle(state);
 
                     if (_enabled && !gameBlocked)
                     {

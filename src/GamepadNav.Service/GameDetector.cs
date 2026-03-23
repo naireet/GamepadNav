@@ -35,8 +35,8 @@ public sealed class GameDetector
         "GOG Galaxy", "GalaxyClient",
         // Our own apps
         "GamepadNav.App", "GamepadNav.Overlay", "GamepadNav.Service",
-        // Streaming
-        "sunshine", "moonlight",
+        // Streaming / VR
+        "sunshine", "moonlight", "VirtualDesktop.Streamer", "VirtualDesktop.Service",
     };
 
     /// <summary>DLLs that indicate a DirectX/Vulkan game when loaded.</summary>
@@ -47,8 +47,10 @@ public sealed class GameDetector
     ];
 
     private readonly HashSet<string> _gameProcesses;
+    private readonly HashSet<string> _suppressProcesses;
     private readonly ILogger<GameDetector> _logger;
     private bool _gameDetected;
+    private bool _fullSuppress;
     private string? _lastGameProcess;
 
     // Cache: remember processes we've already classified to avoid repeated DLL scans
@@ -57,19 +59,42 @@ public sealed class GameDetector
     private const int CacheClearInterval = 120; // Clear cache every ~2 minutes
 
     public bool IsGameRunning => _gameDetected;
+    /// <summary>True when a suppress-listed process is active — L3+R3 override should be skipped.</summary>
+    public bool IsFullSuppressed => _fullSuppress;
     public string? CurrentGame => _lastGameProcess;
 
-    public GameDetector(IEnumerable<string> gameProcesses, ILogger<GameDetector> logger)
+    public GameDetector(IEnumerable<string> gameProcesses, IEnumerable<string> suppressProcesses, ILogger<GameDetector> logger)
     {
         _gameProcesses = new HashSet<string>(gameProcesses, StringComparer.OrdinalIgnoreCase);
+        _suppressProcesses = new HashSet<string>(suppressProcesses, StringComparer.OrdinalIgnoreCase);
         _logger = logger;
     }
 
     /// <summary>
     /// Checks the current foreground window. Returns true if a game is detected.
+    /// Also checks for suppress processes (running anywhere, not just foreground).
     /// </summary>
     public bool Update()
     {
+        // Check suppress list — these processes running anywhere fully disable GamepadNav
+        _fullSuppress = false;
+        foreach (var name in _suppressProcesses)
+        {
+            try
+            {
+                var procs = Process.GetProcessesByName(name);
+                if (procs.Length > 0)
+                {
+                    _fullSuppress = true;
+                    foreach (var p in procs) p.Dispose();
+                    if (!_gameDetected)
+                        SetGameState(true, name + " (suppressed)");
+                    return true;
+                }
+            }
+            catch { }
+        }
+
         // Periodically clear the process cache
         if (++_cacheClearCounter >= CacheClearInterval)
         {

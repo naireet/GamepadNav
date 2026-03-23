@@ -31,6 +31,13 @@ public class GamepadNavConfig
     /// <summary>Process names that trigger auto-disable (case-insensitive, no .exe).</summary>
     public List<string> GameProcesses { get; set; } = [];
 
+    /// <summary>
+    /// Processes that fully suppress GamepadNav — no input, no L3+R3 toggle override.
+    /// Use for apps that also read XInput (VR streaming, etc.) where any GamepadNav
+    /// interference is unwanted.
+    /// </summary>
+    public List<string> SuppressProcesses { get; set; } = [];
+
     /// <summary>Whether GamepadNav starts in enabled state.</summary>
     public bool StartEnabled { get; set; } = true;
 
