@@ -10,12 +10,19 @@ namespace GamepadNav.Service;
 public sealed class InputEngine : BackgroundService
 {
     private readonly ILogger<InputEngine> _logger;
-    private readonly GamepadNavConfig _config;
-    private readonly XInputReader _reader;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ConfigManager _configManager;
+    private XInputReader _reader;
+    private ButtonHandler _buttonHandler;
 
     private bool _enabled;
     private ControllerState _previousState;
-    private readonly ButtonHandler _buttonHandler;
+    private GameDetector? _gameDetector;
+    private IpcServer? _ipcServer;
+
+    // Game detection polling: check every ~500ms, not every frame
+    private int _gameDetectCounter;
+    private const int GameDetectInterval = 30; // frames (~500ms at 60Hz)
 
     // Accumulated fractional mouse movement (SendInput only takes integers)
     private float _mouseAccumX;
@@ -23,36 +30,72 @@ public sealed class InputEngine : BackgroundService
     private float _scrollAccumY;
     private float _scrollAccumX;
 
-    public InputEngine(ILogger<InputEngine> logger)
+    public InputEngine(ILogger<InputEngine> logger, ILoggerFactory loggerFactory)
     {
         _logger = logger;
-        _config = LoadConfig();
-        _reader = new XInputReader(_config.StickDeadZone);
-        _enabled = _config.StartEnabled;
-        _buttonHandler = new ButtonHandler(_config);
+        _loggerFactory = loggerFactory;
+        _configManager = new ConfigManager();
+
+        var config = _configManager.Current;
+        _reader = new XInputReader(config.StickDeadZone);
+        _enabled = config.StartEnabled;
+        _buttonHandler = new ButtonHandler(config);
+
+        _configManager.ConfigChanged += OnConfigChanged;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var config = _configManager.Current;
+
+        _gameDetector = new GameDetector(config.GameProcesses,
+            _loggerFactory.CreateLogger<GameDetector>());
+
+        _ipcServer = new IpcServer(_loggerFactory.CreateLogger<IpcServer>());
+        _ipcServer.CommandReceived += OnIpcCommand;
+        _ipcServer.Start();
+
         _logger.LogInformation("GamepadNav InputEngine starting. Enabled={Enabled}, PollInterval={Interval}ms",
-            _enabled, _config.PollIntervalMs);
+            _enabled, config.PollIntervalMs);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                var state = _reader.Read(_config.ControllerIndex);
+                config = _configManager.Current;
+                var state = _reader.Read(config.ControllerIndex);
 
                 if (state.IsConnected)
                 {
                     // L3+R3 toggle check (always active regardless of _enabled)
                     CheckToggle(state);
 
-                    if (_enabled)
+                    // Game detection (throttled)
+                    bool gameBlocked = false;
+                    if (++_gameDetectCounter >= GameDetectInterval)
                     {
-                        ProcessMouseMovement(state);
-                        ProcessScrolling(state);
+                        _gameDetectCounter = 0;
+                        _gameDetector!.Update();
+                    }
+                    gameBlocked = _gameDetector!.IsGameRunning;
+
+                    if (_enabled && !gameBlocked)
+                    {
+                        ProcessMouseMovement(state, config);
+                        ProcessScrolling(state, config);
                         _buttonHandler.ProcessButtons(state, _previousState);
+                    }
+
+                    // Broadcast status to tray app periodically
+                    if (_gameDetectCounter == 0)
+                    {
+                        _ipcServer.SendStatus(new StatusMessage
+                        {
+                            Enabled = _enabled,
+                            ControllerConnected = state.IsConnected,
+                            GameDetected = gameBlocked,
+                            CurrentGame = _gameDetector.CurrentGame,
+                        });
                     }
                 }
 
@@ -63,13 +106,15 @@ public sealed class InputEngine : BackgroundService
                 _logger.LogError(ex, "Error in input polling loop");
             }
 
-            await Task.Delay(_config.PollIntervalMs, stoppingToken);
+            await Task.Delay(config.PollIntervalMs, stoppingToken);
         }
 
+        _ipcServer.Dispose();
+        _configManager.Dispose();
         _logger.LogInformation("GamepadNav InputEngine stopped.");
     }
 
-    private void ProcessMouseMovement(ControllerState state)
+    private void ProcessMouseMovement(ControllerState state, GamepadNavConfig config)
     {
         if (state.LeftStickX == 0 && state.LeftStickY == 0)
         {
@@ -80,10 +125,10 @@ public sealed class InputEngine : BackgroundService
 
         // Apply acceleration curve: speed = magnitude^acceleration * cursorSpeed
         float magnitude = MathF.Sqrt(state.LeftStickX * state.LeftStickX + state.LeftStickY * state.LeftStickY);
-        float accelerated = MathF.Pow(MathF.Min(magnitude, 1f), _config.CursorAcceleration);
+        float accelerated = MathF.Pow(MathF.Min(magnitude, 1f), config.CursorAcceleration);
 
-        float dx = state.LeftStickX / magnitude * accelerated * _config.CursorSpeed;
-        float dy = -state.LeftStickY / magnitude * accelerated * _config.CursorSpeed; // Y inverted
+        float dx = state.LeftStickX / magnitude * accelerated * config.CursorSpeed;
+        float dy = -state.LeftStickY / magnitude * accelerated * config.CursorSpeed; // Y inverted
 
         _mouseAccumX += dx;
         _mouseAccumY += dy;
@@ -113,12 +158,12 @@ public sealed class InputEngine : BackgroundService
         InputApi.SendInput(1, [input], Marshal.SizeOf<InputApi.INPUT>());
     }
 
-    private void ProcessScrolling(ControllerState state)
+    private void ProcessScrolling(ControllerState state, GamepadNavConfig config)
     {
         // Vertical scroll (right stick Y)
         if (state.RightStickY != 0)
         {
-            _scrollAccumY += state.RightStickY * _config.ScrollSpeed;
+            _scrollAccumY += state.RightStickY * config.ScrollSpeed;
             int scrollAmount = (int)_scrollAccumY;
             if (scrollAmount != 0)
             {
@@ -146,7 +191,7 @@ public sealed class InputEngine : BackgroundService
         // Horizontal scroll (right stick X)
         if (state.RightStickX != 0)
         {
-            _scrollAccumX += state.RightStickX * _config.ScrollSpeed;
+            _scrollAccumX += state.RightStickX * config.ScrollSpeed;
             int scrollAmount = (int)_scrollAccumX;
             if (scrollAmount != 0)
             {
@@ -190,21 +235,27 @@ public sealed class InputEngine : BackgroundService
         }
     }
 
-    private static GamepadNavConfig LoadConfig()
+    private void OnIpcCommand(CommandMessage cmd)
     {
-        var path = GamepadNavConfig.ConfigFilePath;
-        if (File.Exists(path))
+        switch (cmd.Action)
         {
-            try
-            {
-                var json = File.ReadAllText(path);
-                return System.Text.Json.JsonSerializer.Deserialize<GamepadNavConfig>(json) ?? new();
-            }
-            catch
-            {
-                return new GamepadNavConfig();
-            }
+            case "toggle":
+                _enabled = !_enabled;
+                _logger.LogInformation("GamepadNav toggled via IPC: {State}", _enabled ? "ENABLED" : "DISABLED");
+                break;
+            case "enable":
+                _enabled = true;
+                break;
+            case "disable":
+                _enabled = false;
+                break;
         }
-        return new GamepadNavConfig();
+    }
+
+    private void OnConfigChanged(GamepadNavConfig newConfig)
+    {
+        _reader = new XInputReader(newConfig.StickDeadZone);
+        _buttonHandler = new ButtonHandler(newConfig);
+        _logger.LogInformation("Config hot-reloaded");
     }
 }

@@ -1,0 +1,27 @@
+<Window x:Class="GamepadNav.App.KeyboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GamepadNav Keyboard"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
+        WindowStartupLocation="Manual"
+        Visibility="Hidden">
+    <Border Background="#DD1A1A2E" CornerRadius="12" Padding="16" Margin="8">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="20" ShadowDepth="0" Color="Black" Opacity="0.6"/>
+        </Border.Effect>
+        <StackPanel>
+            <!-- Mode indicator -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
+                <TextBlock x:Name="ModeLabel" Text="KEYBOARD" Foreground="#E0E0E0" FontSize="14"
+                           FontWeight="SemiBold" FontFamily="Segoe UI"/>
+                <TextBlock Text="  ●  " Foreground="#555" FontSize="10" VerticalAlignment="Center"/>
+                <TextBlock Text="Guide+Y Close  |  Guide+X Numpad  |  A Select  |  B Backspace"
+                           Foreground="#888" FontSize="11" VerticalAlignment="Center" FontFamily="Segoe UI"/>
+            </StackPanel>
+
+            <!-- Key grid container -->
+            <UniformGrid x:Name="KeyGrid" Columns="10" HorizontalAlignment="Center"/>
+        </StackPanel>
+    </Border>
+</Window>
