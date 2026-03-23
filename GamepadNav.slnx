@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GamepadNav.App/GamepadNav.App.csproj" />
+    <Project Path="src/GamepadNav.Core/GamepadNav.Core.csproj" />
+    <Project Path="src/GamepadNav.Overlay/GamepadNav.Overlay.csproj" />
+    <Project Path="src/GamepadNav.Service/GamepadNav.Service.csproj" />
+  </Folder>
+</Solution>
