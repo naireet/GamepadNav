@@ -23,8 +23,26 @@ public static partial class InputApi
     [LibraryImport("user32.dll")]
     public static partial int GetSystemMetrics(int nIndex);
 
+    [LibraryImport("user32.dll")]
+    public static partial nint MonitorFromWindow(nint hwnd, uint dwFlags);
+
+    [LibraryImport("user32.dll", EntryPoint = "GetMonitorInfoW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    public const uint MONITOR_DEFAULTTONEAREST = 2;
+
     public const int SM_CXSCREEN = 0;
     public const int SM_CYSCREEN = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
 
     public const uint INPUT_MOUSE = 0;
     public const uint INPUT_KEYBOARD = 1;
