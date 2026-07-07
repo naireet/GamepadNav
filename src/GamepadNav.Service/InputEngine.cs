@@ -37,6 +37,16 @@ public sealed partial class InputEngine : BackgroundService
     /// </summary>
     public static Action<string>? OverlayCallback { get; set; }
 
+    /// <summary>
+    /// Live status snapshot, updated every poll while a controller is connected.
+    /// Read by the App's combo-viewer overlay to show current mode at a glance
+    /// without needing IPC (the App hosts InputEngine in-process).
+    /// </summary>
+    public static bool StatusEnabled { get; private set; }
+    public static bool StatusGameBlocked { get; private set; }
+    public static string? StatusGameName { get; private set; }
+    public static bool StatusFullSuppressed { get; private set; }
+
     // Game detection polling: check every ~500ms
     private int _gameDetectCounter;
     private const int GameDetectInterval = 30;
@@ -182,13 +192,19 @@ public sealed partial class InputEngine : BackgroundService
                         CheckToggle(state);
                     }
 
+                    // Live status snapshot for the combo-viewer overlay
+                    StatusEnabled = _enabled;
+                    StatusGameBlocked = gameBlocked;
+                    StatusGameName = _gameDetector?.CurrentGame;
+                    StatusFullSuppressed = _gameDetector?.IsFullSuppressed ?? false;
+
                     if (_enabled && !gameBlocked)
                     {
                         ProcessMouseMovement(state, config, deltaTime);
                         ProcessScrolling(state, config, deltaTime);
                         _buttonHandler.ProcessButtons(state, _previousState);
 
-                        // Back+Y/X combos → overlay commands
+                        // Back+Y/X/B combos → overlay commands
                         bool backHeld = state.IsButtonDown(GamepadButtons.Back);
                         if (backHeld)
                         {
@@ -201,6 +217,11 @@ public sealed partial class InputEngine : BackgroundService
                             {
                                 if (OverlayCallback != null) OverlayCallback("toggleNumpad");
                                 else _ipcServer?.SendCommand("toggleNumpad");
+                            }
+                            if (Pressed(state, _previousState, GamepadButtons.B))
+                            {
+                                if (OverlayCallback != null) OverlayCallback("toggleComboViewer");
+                                else _ipcServer?.SendCommand("toggleComboViewer");
                             }
                         }
                     }

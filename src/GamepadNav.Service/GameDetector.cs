@@ -30,8 +30,14 @@ public sealed class GameDetector
         // Utilities
         "SnippingTool", "ScreenClippingHost", "ScreenSketch",
         // Game launchers (not games themselves)
+        // NOTE: "steamwebhelper" is deliberately NOT here — it's handled as a special
+        // case in Update() because it renders both small desktop popups (should stay
+        // whitelisted) and fullscreen Big Picture Mode (should be treated as a game,
+        // since BPM reads raw XInput itself and double-fires input with GamepadNav).
+        // "Playnite.FullscreenApp" likely has the same latent double-input issue if a
+        // user relies on Playnite's own gamepad navigation, but that's not fixed here.
         "Playnite.DesktopApp", "Playnite.FullscreenApp",
-        "steam", "steamwebhelper", "EpicGamesLauncher",
+        "steam", "EpicGamesLauncher",
         "GOG Galaxy", "GalaxyClient",
         // Our own apps
         "GamepadNav.App", "GamepadNav.Overlay", "GamepadNav.Service",
@@ -128,6 +134,25 @@ public sealed class GameDetector
                 return true;
             }
 
+            // Special case: steamwebhelper renders both small desktop popups (chat,
+            // friends list, notifications — should NOT disable GamepadNav) and
+            // fullscreen Steam Big Picture Mode (which reads raw XInput itself and
+            // would double-fire input alongside GamepadNav). Classify by fullscreen
+            // state directly rather than via the DLL heuristic, since CEF may not
+            // always have d3d11/vulkan loaded.
+            if (name.Equals("steamwebhelper", StringComparison.OrdinalIgnoreCase))
+            {
+                bool bpmFullscreen = IsFullscreen(hwnd);
+                if (bpmFullscreen)
+                {
+                    SetGameState(true, name);
+                    return true;
+                }
+
+                SetGameState(false, null);
+                return false;
+            }
+
             // Whitelist — never a game
             if (WhitelistedProcesses.Contains(name))
             {
@@ -183,11 +208,28 @@ public sealed class GameDetector
         if (!InputApi.GetWindowRect(hwnd, out var rect))
             return false;
 
-        int screenW = InputApi.GetSystemMetrics(InputApi.SM_CXSCREEN);
-        int screenH = InputApi.GetSystemMetrics(InputApi.SM_CYSCREEN);
-
         int winW = rect.Right - rect.Left;
         int winH = rect.Bottom - rect.Top;
+
+        // Compare against the monitor the window actually lives on, not always the
+        // primary display — otherwise Big Picture (or any fullscreen app) on a
+        // secondary monitor is misclassified when its monitor differs in size from
+        // the primary.
+        var monitor = InputApi.MonitorFromWindow(hwnd, InputApi.MONITOR_DEFAULTTONEAREST);
+        if (monitor != nint.Zero)
+        {
+            var mi = new InputApi.MONITORINFO { cbSize = (uint)Marshal.SizeOf<InputApi.MONITORINFO>() };
+            if (InputApi.GetMonitorInfo(monitor, ref mi))
+            {
+                int monW = mi.rcMonitor.Right - mi.rcMonitor.Left;
+                int monH = mi.rcMonitor.Bottom - mi.rcMonitor.Top;
+                return winW >= monW && winH >= monH;
+            }
+        }
+
+        // Fallback: primary screen metrics if monitor lookup fails
+        int screenW = InputApi.GetSystemMetrics(InputApi.SM_CXSCREEN);
+        int screenH = InputApi.GetSystemMetrics(InputApi.SM_CYSCREEN);
 
         return winW >= screenW && winH >= screenH;
     }

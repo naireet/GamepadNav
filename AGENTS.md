@@ -41,18 +41,24 @@ dotnet publish src\GamepadNav.App -c Release -r win-x64 --self-contained false -
 ## Startup
 
 - **Tray app**: Scheduled task `GamepadNav` — runs `publish\app\GamepadNav.App.exe` at logon
-- **Lock screen**: Xbox-PIN-Controller credential provider DLL in System32 (see below)
+- **Lock screen**: handled natively by Windows 11 (25H2+) — no custom credential provider deployed anymore
 
 ## Lock Screen PIN Entry
 
-Uses [Xbox-PIN-Controller](https://github.com/naireet/Xbox-PIN-Controller) (forked, MIT license).
-Credential Provider DLL loaded by LogonUI.exe — runs inside the Winlogon process.
+Windows 11 25H2 (build 26200+) natively supports Xbox controller PIN entry at the lock
+screen — a controller-driven PIN keypad UI appears automatically on the Winlogon secure
+desktop. Confirmed working on this machine 2026-07-07.
 
-Install: `copy XboxPINController.dll C:\Windows\System32` + `reg import register.reg`
-Uninstall: `reg import Unregister.reg` + `del C:\Windows\System32\XboxPINController.dll`
-Files: `C:\Code\Xbox-PIN-Controller\release\`
+Controlled by: `HKLM\SOFTWARE\Microsoft\Input\Settings\ControllerProcessor\ControllerToVKMapping` → `Enabled` (DWORD, `1` = on, default).
 
-PIN mapping: 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Right, 5=LT, 6=RT, 7=LB, 8=RB, 9=Y, 0=X
+We previously used a custom [Xbox-PIN-Controller](https://github.com/naireet/Xbox-PIN-Controller)
+credential provider DLL (forked, MIT license) to fill this gap before Microsoft shipped native
+support. It has been fully removed from this machine: `Unregister.reg` run (CLSID
+`{5fd3d285-0dd9-4362-8855-e0abaacd4af6}` removed from Credential Providers), DLL deleted from
+`C:\Windows\System32`. The fork repo (`C:\Code\Xbox-PIN-Controller\release\`) is kept for
+reference only and is no longer installed anywhere.
+
+PIN mapping (native Windows, for reference): 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Right, 5=LT, 6=RT, 7=LB, 8=RB, 9=Y, 0=X
 
 ## Controller Mapping
 
@@ -73,6 +79,7 @@ PIN mapping: 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Right, 5=LT, 6=RT, 7=LB, 8=RB, 9=Y,
 | Back | Combo modifier (see below) |
 | Back + Y | Toggle virtual keyboard |
 | Back + X | Toggle numpad mode |
+| Back + B | Toggle shortcuts overlay |
 | L3 + R3 | Toggle GamepadNav on/off |
 
 ## Key Files
@@ -86,6 +93,7 @@ PIN mapping: 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Right, 5=LT, 6=RT, 7=LB, 8=RB, 9=Y,
 | `src/GamepadNav.Service/DesktopManager.cs` | Winlogon/Default desktop switching |
 | `src/GamepadNav.Service/GameDetector.cs` | Foreground window game detection |
 | `src/GamepadNav.Service/Program.cs` | Service host entry point |
+| `src/GamepadNav.App/ComboViewerWindow.xaml(.cs)` | Back+B shortcuts/combo cheat-sheet overlay |
 
 ## Tech Stack
 
