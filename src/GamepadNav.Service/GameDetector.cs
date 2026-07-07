@@ -39,6 +39,10 @@ public sealed class GameDetector
         "Playnite.DesktopApp", "Playnite.FullscreenApp",
         "steam", "EpicGamesLauncher",
         "GOG Galaxy", "GalaxyClient",
+        // Xbox app (Microsoft.GamingApp) has its own native gamepad navigation —
+        // whitelisting to avoid double input. "XboxPcApp" is the current process name;
+        // "XboxApp" is kept for older/legacy builds of the app.
+        "XboxPcApp", "XboxApp",
         // Our own apps
         "GamepadNav.App", "GamepadNav.Overlay", "GamepadNav.Service",
         // Streaming / VR
