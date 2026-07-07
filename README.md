@@ -9,7 +9,7 @@ Xbox controller → mouse/keyboard input for Windows. Navigate the desktop, brow
 - **Full button mapping** — triggers for clicks, bumpers for Alt/Ctrl, face buttons for Enter/Backspace/Tab/Win/Esc
 - **Combos** — RB+D-pad for browser back/forward, RB+X for Alt+Tab, Back+Y/X for keyboard/numpad overlays
 - **Virtual keyboard** — WPF QWERTY + numpad overlay, d-pad navigable
-- **Login screen PIN entry** — via [Xbox-PIN-Controller](https://github.com/naireet/Xbox-PIN-Controller) credential provider
+- **Login screen PIN entry** — native Windows 11 gamepad PIN keypad (25H2+, no longer needs a custom credential provider)
 - **Game auto-disable** — DLL-based detection (D3D/Vulkan + fullscreen heuristic)
 - **Manual toggle** — L3+R3 to enable/disable anytime
 
@@ -48,13 +48,15 @@ dotnet publish src\GamepadNav.App -c Release -r win-x64 --self-contained false -
 Runs at logon via scheduled task `GamepadNav`.
 
 ### Lock Screen PIN Entry
-Uses a [Credential Provider DLL](https://github.com/naireet/Xbox-PIN-Controller) (forked from MikeCoder96, MIT license):
+As of Windows 11 25H2 (build 26200+), Windows natively supports Xbox controller PIN entry at
+the lock screen — no custom credential provider needed. It's controlled by:
 
-1. Copy `XboxPINController.dll` to `C:\Windows\System32`
-2. Run `register.reg` as Administrator
-3. Disable built-in controller navigation: set `HKLM\SOFTWARE\Microsoft\Input\Settings\ControllerProcessor\ControllerToVKMapping` → `Enabled` = DWORD `0`
+`HKLM\SOFTWARE\Microsoft\Input\Settings\ControllerProcessor\ControllerToVKMapping` → `Enabled` = DWORD `1`
 
-To remove: run `Unregister.reg`, delete the DLL.
+This is enabled by default on supported builds. We previously shipped a custom
+[Credential Provider DLL](https://github.com/naireet/Xbox-PIN-Controller) (forked from
+MikeCoder96, MIT license) to cover this before Microsoft added native support — it has since
+been removed (unregistered and deleted) in favor of the built-in feature.
 
 ## Architecture
 
@@ -63,8 +65,10 @@ GamepadNav.App          — WPF tray app hosting InputEngine (single process)
 GamepadNav.Service      — Standalone engine (for development/testing)
 GamepadNav.Core         — Shared types, XInput, P/Invoke, config
 GamepadNav.Overlay      — Win32/GDI numpad overlay (for future use)
-Xbox-PIN-Controller     — Credential Provider DLL (lock screen, separate repo)
 ```
+
+Lock screen PIN entry is now handled by Windows natively; the Xbox-PIN-Controller
+credential provider (separate repo) is no longer deployed.
 
 ## License
 
