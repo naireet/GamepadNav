@@ -62,6 +62,7 @@ public class CommandMessage : IpcMessage
     // "enable" / "disable" — explicit set
     // "showKeyboard" / "hideKeyboard" — keyboard overlay
     // "showNumpad" / "hideNumpad" — numpad mode
+    // "toggleComboViewer" — controller shortcuts/combo cheat-sheet overlay
 }
 
 /// <summary>

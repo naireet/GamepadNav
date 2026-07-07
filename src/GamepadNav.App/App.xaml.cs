@@ -10,6 +10,7 @@ public partial class App : Application
 {
     private TaskbarIcon? _trayIcon;
     private KeyboardWindow? _keyboardWindow;
+    private ComboViewerWindow? _comboViewerWindow;
     private IHost? _engineHost;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -17,6 +18,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         _keyboardWindow = new KeyboardWindow();
+        _comboViewerWindow = new ComboViewerWindow();
 
         // Wire InputEngine overlay commands directly to the keyboard window
         InputEngine.OverlayCallback = action =>
@@ -27,6 +29,7 @@ public partial class App : Application
                 {
                     case "toggleKeyboard": _keyboardWindow.Toggle(); break;
                     case "toggleNumpad": _keyboardWindow.ToggleNumpad(); break;
+                    case "toggleComboViewer": _comboViewerWindow.Toggle(); break;
                 }
             });
         };
@@ -52,6 +55,10 @@ public partial class App : Application
         var keyboardItem = new System.Windows.Controls.MenuItem { Header = "Show Keyboard" };
         keyboardItem.Click += (_, _) => _keyboardWindow?.Toggle();
         menu.Items.Add(keyboardItem);
+
+        var shortcutsItem = new System.Windows.Controls.MenuItem { Header = "Show Shortcuts" };
+        shortcutsItem.Click += (_, _) => _comboViewerWindow?.Toggle();
+        menu.Items.Add(shortcutsItem);
 
         menu.Items.Add(new System.Windows.Controls.Separator());
 

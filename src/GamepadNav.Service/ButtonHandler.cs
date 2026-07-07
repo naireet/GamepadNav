@@ -30,16 +30,16 @@ public sealed class ButtonHandler
         HandleTriggerMouse(current.LeftTrigger, ref _leftTriggerHeld,
             InputApi.MOUSEEVENTF_RIGHTDOWN, InputApi.MOUSEEVENTF_RIGHTUP);
 
-        // Suppress X, Y when Back is held (Back+X/Y are combo actions handled by tray app)
+        // Suppress X, Y, B when Back is held (Back+X/Y/B are combo actions handled by tray app)
         if (!backHeld)
         {
             HandleKeyButton(current, previous, GamepadButtons.X, InputApi.VK_TAB);
             HandleKeyButton(current, previous, GamepadButtons.Y, InputApi.VK_LWIN);
+            HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_BACK);
         }
 
         // --- Keyboard keys ---
         HandleKeyButton(current, previous, GamepadButtons.A, InputApi.VK_RETURN);
-        HandleKeyButton(current, previous, GamepadButtons.B, InputApi.VK_BACK);
         HandleKeyButton(current, previous, GamepadButtons.Start, InputApi.VK_ESCAPE);
 
         // D-pad → arrow keys

@@ -10,6 +10,7 @@ Xbox controller → mouse/keyboard input for Windows. Navigate the desktop, brow
 - **Combos** — RB+D-pad for browser back/forward, RB+X for Alt+Tab, Back+Y/X for keyboard/numpad overlays
 - **Virtual keyboard** — WPF QWERTY + numpad overlay, d-pad navigable
 - **Login screen PIN entry** — native Windows 11 gamepad PIN keypad (25H2+, no longer needs a custom credential provider)
+- **Shortcuts overlay** — Back+B pops up a couch-readable cheat-sheet of the current button mapping + live status (active/disabled/game-paused)
 - **Game auto-disable** — DLL-based detection (D3D/Vulkan + fullscreen heuristic)
 - **Manual toggle** — L3+R3 to enable/disable anytime
 
@@ -30,6 +31,7 @@ Xbox controller → mouse/keyboard input for Windows. Navigate the desktop, brow
 | Start | Escape |
 | Back + Y | Toggle keyboard overlay |
 | Back + X | Toggle numpad overlay |
+| Back + B | Toggle shortcuts overlay |
 | L3 + R3 | Toggle GamepadNav on/off |
 
 ## Requirements

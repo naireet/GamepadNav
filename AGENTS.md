@@ -79,6 +79,7 @@ PIN mapping (native Windows, for reference): 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Rig
 | Back | Combo modifier (see below) |
 | Back + Y | Toggle virtual keyboard |
 | Back + X | Toggle numpad mode |
+| Back + B | Toggle shortcuts overlay |
 | L3 + R3 | Toggle GamepadNav on/off |
 
 ## Key Files
@@ -92,6 +93,7 @@ PIN mapping (native Windows, for reference): 1=D-Up, 2=D-Left, 3=D-Down, 4=D-Rig
 | `src/GamepadNav.Service/DesktopManager.cs` | Winlogon/Default desktop switching |
 | `src/GamepadNav.Service/GameDetector.cs` | Foreground window game detection |
 | `src/GamepadNav.Service/Program.cs` | Service host entry point |
+| `src/GamepadNav.App/ComboViewerWindow.xaml(.cs)` | Back+B shortcuts/combo cheat-sheet overlay |
 
 ## Tech Stack
 
